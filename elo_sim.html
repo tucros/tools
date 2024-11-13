@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elo Rating Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-2xl font-bold mb-6">Elo Rating Simulation</h1>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Player A True Skill</label>
+                            <input type="number" id="trueEloA" value="1200" class="w-full p-2 border rounded" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Player B True Skill</label>
+                            <input type="number" id="trueEloB" value="1800" class="w-full p-2 border rounded" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Player A Start Elo</label>
+                            <input type="number" id="startEloA" value="1000" class="w-full p-2 border rounded" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Player B Start Elo</label>
+                            <input type="number" id="startEloB" value="1000" class="w-full p-2 border rounded" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-1">K-Factor: <span
+                                id="kFactorValue">32</span></label>
+                        <input type="range" id="kFactor" min="8" max="64" step="8" value="32" class="w-full" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Maximum Games: <span
+                                id="maxGamesValue">200</span></label>
+                        <input type="range" id="maxGames" min="50" max="500" step="50" value="200" class="w-full" />
+                    </div>
+                </div>
+
+                <div class="space-y-4">
+                    <div class="text-lg space-y-2">
+                        <p>Current Ratings:</p>
+                        <p>Player A: <span id="currentEloA">1000</span></p>
+                        <p>Player B: <span id="currentEloB">1000</span></p>
+                        <p>Games Played: <span id="gamesPlayed">0</span> / <span id="maxGamesDisplay">200</span></p>
+                    </div>
+                    <div class="space-x-2">
+                        <button id="startButton" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Start
+                        </button>
+                        <button id="resetButton" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100">
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full h-96">
+                <canvas id="eloChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let running = false;
+        let gameData = [];
+        let simulationInterval;
+        let iteration = 0;
+        let currentEloA = 1000;
+        let currentEloB = 1000;
+        let chart;
+
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('eloChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Player A Current',
+                            data: [],
+                            borderColor: '#8884d8',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Player B Current',
+                            data: [],
+                            borderColor: '#82ca9d',
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Player A True',
+                            data: [],
+                            borderColor: '#8884d8',
+                            borderDash: [5, 5],
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Player B True',
+                            data: [],
+                            borderColor: '#82ca9d',
+                            borderDash: [5, 5],
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    animation: false,
+                }
+            });
+        }
+
+        function getWinProbability(ratingA, ratingB) {
+            return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
+        }
+
+        function simulatePerformance(trueRating) {
+            const performanceVariation = (Math.random() + Math.random() - 1) * 100;
+            return trueRating + performanceVariation;
+        }
+
+        function simulateGame() {
+            const trueEloA = Number(document.getElementById('trueEloA').value);
+            const trueEloB = Number(document.getElementById('trueEloB').value);
+            const kFactor = Number(document.getElementById('kFactor').value);
+
+            const performanceA = simulatePerformance(trueEloA);
+            const performanceB = simulatePerformance(trueEloB);
+
+            const winProbA = getWinProbability(performanceA, performanceB);
+            const aWins = Math.random() < winProbA;
+
+            const expectedScoreA = getWinProbability(currentEloA, currentEloB);
+
+            const scoreA = aWins ? 1 : 0;
+            const scoreB = aWins ? 0 : 1;
+
+            const ratingChangeA = kFactor * (scoreA - expectedScoreA);
+            const ratingChangeB = kFactor * (scoreB - (1 - expectedScoreA));
+
+            currentEloA += ratingChangeA;
+            currentEloB += ratingChangeB;
+
+            updateChart();
+            updateDisplay();
+
+            iteration++;
+
+            if (iteration >= Number(document.getElementById('maxGames').value)) {
+                stopSimulation();
+            }
+        }
+
+        function updateChart() {
+            const trueEloA = Number(document.getElementById('trueEloA').value);
+            const trueEloB = Number(document.getElementById('trueEloB').value);
+
+            chart.data.labels.push(iteration);
+            chart.data.datasets[0].data.push(Math.round(currentEloA));
+            chart.data.datasets[1].data.push(Math.round(currentEloB));
+            chart.data.datasets[2].data.push(trueEloA);
+            chart.data.datasets[3].data.push(trueEloB);
+            chart.update();
+        }
+
+        function updateDisplay() {
+            document.getElementById('currentEloA').textContent = Math.round(currentEloA);
+            document.getElementById('currentEloB').textContent = Math.round(currentEloB);
+            document.getElementById('gamesPlayed').textContent = iteration;
+        }
+
+        function startSimulation() {
+            running = true;
+            document.getElementById('startButton').textContent = 'Pause';
+            simulationInterval = setInterval(simulateGame, 100);
+        }
+
+        function stopSimulation() {
+            running = false;
+            document.getElementById('startButton').textContent = 'Start';
+            clearInterval(simulationInterval);
+        }
+
+        function resetSimulation() {
+            stopSimulation();
+            iteration = 0;
+            currentEloA = Number(document.getElementById('startEloA').value);
+            currentEloB = Number(document.getElementById('startEloB').value);
+            chart.data.labels = [];
+            chart.data.datasets.forEach(dataset => dataset.data = []);
+            chart.update();
+            updateDisplay();
+        }
+
+        // Event Listeners
+        document.getElementById('startButton').addEventListener('click', () => {
+            if (running) {
+                stopSimulation();
+            } else {
+                startSimulation();
+            }
+        });
+
+        document.getElementById('resetButton').addEventListener('click', resetSimulation);
+
+        document.getElementById('kFactor').addEventListener('input', (e) => {
+            document.getElementById('kFactorValue').textContent = e.target.value;
+        });
+
+        document.getElementById('maxGames').addEventListener('input', (e) => {
+            document.getElementById('maxGamesValue').textContent = e.target.value;
+            document.getElementById('maxGamesDisplay').textContent = e.target.value;
+        });
+
+        // Initialize
+        initChart();
+    </script>
+</body>
+
+</html>
