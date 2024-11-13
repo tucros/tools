@@ -2,6 +2,7 @@
 
 Hello World 
 
+[elo_sim.html](elo_sim.html)
 
 ## Blog Posts
 
